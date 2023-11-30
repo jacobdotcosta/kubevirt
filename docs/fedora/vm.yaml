@@ -1,0 +1,59 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora0001
+  namespace: vm-fedora
+spec:
+  running: false
+  template:
+    metadata:
+      labels:
+        kubevirt.io/size: small
+        kubevirt.io/domain: fedora0001
+    spec:
+      domain:
+        devices:
+          disks:
+            - name: datavolumedisk1
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+        resources:
+          requests:
+            memory: 64M
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - dataVolume:
+          name: fedora-root
+        name: datavolumedisk1
+      - cloudInitNoCloud:
+          userData: |
+            #!/bin/sh
+            hostname: fedora0001
+            ssh_pwauth: True
+            disable_root: false
+            ssh_authorized_keys:
+            - ssh-rsa ...
+        name: cloudinitdisk
+  dataVolumeTemplates:
+  - metadata:
+      name: fedora-root
+    spec:
+      pvc:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 7Gi
+      source:
+        pvc:
+          name: image-upload dv fedora-cloud-base-39-1-5-dv
+          namespace: cdi-images
+          storageClassName: local-path

@@ -1,0 +1,191 @@
+= KubeVirt: installing Fedora VM from qcow2
+Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+:icons: font
+:keywords: k8s, virtualization, cdi
+:revdate: {docdate}
+:toclevels: 3
+:toc: left
+:description: KubeVirt: installing Fedora VM from qcow2
+
+== Introduction
+
+This document describes the steps to deploy a Microsoft Windows VM on a 
+ kubernetes cluster using _kubevirt_.
+
+== Acronyms
+
+DV:: Data Volume (https://kubevirt.io/user-guide/virtual_machines/disks_and_volumes/)
+PV:: Kubernetes Persistent Volume
+PVC:: Kubernetes Persistent Volume Claim
+
+== Pre-requisites
+
+* There is enough free CPU, Memory and disk space in the cluster to 
+ deploy a Fedora VM.
+* Local file containing a Fedora Cloud Image
+** can be obtained from https://fedoraproject.org/cloud/download
+* CDI installed (check the link:../cdi/README.adoc[Kubeirt CDI docs])
+
+== Preparation
+
+[source,bash]
+----
+kubectl create namespace vm-fedora
+----
+
+== Create VM
+
+[.lead]
+Create the VM
+
+[source,bash]
+----
+kc apply -f kubevirt/fedora/vm.yaml
+----
+
+Check the VM has been created.
+
+[source,bash]
+----
+kc -n vm-fedora get vm
+----
+
+[source]
+----
+NAME        AGE    STATUS             READY
+fedora0001  22s    Stopped            False
+----
+
+Start the VM with `virtctl`.
+
+[source,bash]
+----
+virtctl -n vm-fedora start fedora0001
+
+VM fedora0001 was scheduled to start
+----
+
+Check the VM instances.
+
+[source,bash]
+----
+kc -n vm-fedora get vmis
+
+NAME        AGE    PHASE     IP    NODENAME   READY
+fedora0001  8s     Pending                    False
+----
+
+[source,bash]
+----
+kc -n vm-fedora describe vmi fedora0001
+
+...
+  Conditions:
+    Last Probe Time:       2023-11-30T08:46:56Z
+    Last Transition Time:  2023-11-30T08:46:56Z
+    Message:               virt-launcher pod has not yet been scheduled
+----
+
+
+First the DV will be cloned.
+
+[source,bash]
+----
+kc -n vm-fedora get dv
+
+NAME                               PHASE            PROGRESS  RESTARTS  AGE
+fedora-cloud-base-39-15-qcow2-dv   UploadReady      N/A                 16m
+fedora-root                        CloneInProgress  N/A                 2m47s
+----
+
+[source,bash]
+----
+kc describe dv fedora-root
+
+Events:
+  Type    Reason           Age    From                             Message
+  ----    ------           ----   ----                             -------
+  Normal  Pending          4m17s  datavolume-pvc-clone-controller  PVC fedora-root Pending
+  Normal  Bound            3m50s  datavolume-pvc-clone-controller  PVC fedora-root Bound
+  Normal  CloneInProgress  3m38s  datavolume-pvc-clone-controller  Cloning from default/fedora-cloud-base-39-15-qcow2-dv into default/fedora-root in progress
+
+----
+
+== Remove
+
+[source,bash]
+----
+kc delete -f kubevirt/fedora/vm.yaml
+kc delete dv fedora-cloud-base-39-15-qcow2-dv
+----
+
+== References
+
+* https://kubevirt.io/2020/KubeVirt-VM-Image-Usage-Patterns.html
+
+== Troubleshooting
+
+=== The process seems to be stuck.
+
+[source,bash]
+--------------------
+kc -n vm-fedora describe pod cdi-upload-fedora-cloud-base-39-15-qcow2-dv
+
+...
+Events:
+  Type     Reason            Age   From               Message
+  ----     ------            ----  ----               -------
+  Warning  FailedScheduling  30s   default-scheduler  0/1 nodes are available: persistentvolumeclaim "fedora-cloud-base-39-15-qcow2-dv-scratch" not found. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod..
+  Warning  FailedScheduling  28s   default-scheduler  0/1 nodes are available: 1 node(s) didn't find available persistent volumes to bind. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling..
+--------------------
+
+Checking the created DV..
+
+[source,bash]
+--------------------
+kc -n vm-fedora describe dv fedora-cloud-base-39-15-qcow2-dv
+
+Events:
+  Type    Reason                Age    From                          Message
+  ----    ------                ----   ----                          -------
+  Normal  Pending               2m53s  datavolume-upload-controller  PVC fedora-cloud-base-39-15-qcow2-dv Pending
+  Normal  CreatingScratchSpace  2m53s  datavolume-upload-controller  target PVC fedora-cloud-base-39-15-qcow2-dv Pending and Creating scratch space
+  Normal  Claim Pending         2m53s  datavolume-upload-controller  target PVC fedora-cloud-base-39-15-qcow2-dv Pending and Claim Pending
+--------------------
+
+And the PVC.
+
+[source,bash]
+--------------------
+kc -n vm-fedora describe pvc fedora-cloud-base-39-15-qcow2-dv
+
+Events:
+  Type    Reason                Age                From                         Message
+  ----    ------                ----               ----                         -------
+  Normal  WaitForFirstConsumer  72s (x2 over 72s)  persistentvolume-controller  waiting for first consumer to be created before binding
+  Normal  WaitForPodScheduled   11s (x7 over 72s)  persistentvolume-controller  waiting for pod cdi-upload-fedora-cloud-base-39-15-qcow2-dv to be scheduled
+--------------------
+
+There is another PVC that has been created, named `fedora-cloud-base-39-15-qcow2-dv-scratch`.
+
+[source,bash]
+----
+kc -n vm-fedora get pvc
+
+NAME                                       STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+fedora-cloud-base-39-15-qcow2-dv           Pending                                      local-storage   3m39s
+fedora-cloud-base-39-15-qcow2-dv-scratch   Pending                                      standard        3m39s
+----
+
+Checking that PVC.
+
+[source,bash]
+--------------------
+kc -n vm-fedora describe pvc fedora-cloud-base-39-15-qcow2-dv-scratch
+
+Events:
+  Type    Reason               Age                   From                         Message
+  ----    ------               ----                  ----                         -------
+  Normal  WaitForPodScheduled  14s (x20 over 4m45s)  persistentvolume-controller  waiting for pod cdi-upload-fedora-cloud-base-39-15-qcow2-dv to be scheduled
+
+--------------------

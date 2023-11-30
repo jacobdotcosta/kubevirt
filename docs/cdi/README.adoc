@@ -1,0 +1,226 @@
+= KubeVirt: Containerized Data Importer 
+Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+:icons: font
+:keywords: k8s, virtualization, cdi
+:revdate: {docdate}
+:toclevels: 3
+:toc: left
+:description: KubeVirt: installing Fedora VM from qcow2
+
+== Introduction
+
+This document describes the steps to install CDI and upload an image.
+
+== Install CDI
+
+Check the link:https://kubevirt.io/user-guide/operations/containerized_data_importer/[Containerized Data Importer] 
+ document.
+
+[source,bash]
+----
+export TAG=$(curl -s -w %{redirect_url} https://github.com/kubevirt/containerized-data-importer/releases/latest)
+export VERSION=$(echo ${TAG##*/})
+echo $TAG
+echo $VERSION
+kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
+kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
+----
+
+
+=== Set proxy for `cdi-uploadproxy` service
+
+Get the  `cdi-uploadproxy` service address.
+
+[source,bash]
+----
+CDI_UPLOAD_PROXY_IP=$(kubectl -n cdi get service cdi-uploadproxy -o jsonpath='{.spec.clusterIP}')
+echo ${CDI_UPLOAD_PROXY_IP}
+----
+
+.Show detailed information for the `cdi-uploadproxy` service location.
+[NOTE]
+====
+Information on obtaining the `cdi-uploadproxy` service address.
+
+[source,bash]
+----
+kubectl get services -n cdi
+----
+
+The list of services on the `cdi` namespace is presented.
+
+[source]
+----
+NAME                       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+cdi-api                    ClusterIP   10.96.87.138   <none>        443/TCP         86m
+cdi-prometheus-metrics     ClusterIP   10.96.117.2    <none>        8080/TCP        86m
+cdi-uploadproxy            ClusterIP   10.96.8.120    <none>        443/TCP         86m
+cdi-uploadproxy-nodeport   NodePort    10.96.39.19    <none>        443:31001/TCP   43m
+----
+
+====
+
+Set up a local port forward using kubectl.
+
+[source,bash]
+----
+kubectl port-forward -n cdi service/cdi-uploadproxy 38443:443
+----
+
+== Prepare
+
+Create a namespace for the vm images.
+
+[source,bash]
+----
+kubectl create namespace cdi-images
+----
+
+Create PVCs.
+
+[source,bash]
+----
+kubectl apply -f k8s/cdi-pvc.yaml
+----
+
+
+== Install
+
+
+
+=== Import the VM image that will be used by CDI
+
+[.lead]
+Upload the VM image
+
+Upload the image to a DavaVolume.
+
+[NOTE]
+====
+To use a PVC instead of a DV use `virtctl image-upload pvc` instead.
+====
+
+[source,bash]
+----
+virtctl image-upload dv fedora-cloud-base-39-1-5-dv \
+  --image-path=Fedora-Cloud-Base-39-1.5.x86_64.raw.xz \
+  --access-mode=ReadWriteOnce \
+  --volume-mode=filesystem \
+  --size=600Mi \
+  --uploadproxy-url=https://127.0.0.1:38443 \
+  --insecure \
+  --wait-secs=240 \
+  --storage-class=local-path \
+  --namespace cdi-images \
+  --force-bind
+----
+
+
+The output is the following.
+
+[source]
+----
+PVC vm-fedora/image-upload dv fedora-cloud-base-39-1-5-dv not found 
+DataVolume vm-fedora/image-upload dv fedora-cloud-base-39-1-5-dv created
+Waiting for PVC image-upload dv fedora-cloud-base-39-1-5-dv upload pod to be ready...
+----
+
+At this point I had some problems which I now moved to the <<Troubleshooting>> 
+ section.
+
+Finally the image is uploaded.
+
+[source,bash]
+----
+kc -n vm-fedora get dv
+NAME                               PHASE         PROGRESS   RESTARTS   AGE
+image-upload dv fedora-cloud-base-39-1-5-dv   UploadReady   N/A        1          16h
+----
+
+[source,bash]
+----
+kc -n vm-fedora get pvc
+NAME                                       STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+image-upload dv fedora-cloud-base-39-1-5-dv           Bound    pv0005   7Gi        RWO            local-storage   16h
+image-upload dv fedora-cloud-base-39-1-5-dv-scratch   Bound    pv0002   7Gi        RWO            local-storage   16h
+----
+
+[source,bash]
+----
+kc -n vm-fedora get pod
+NAME                                          READY   STATUS    RESTARTS      AGE
+cdi-upload-image-upload dv fedora-cloud-base-39-1-5-dv   1/1     Running   1 (12m ago)   16h
+----
+
+First the DV will be cloned.
+
+[source,bash]
+----
+kc get dv
+
+NAME                               PHASE                  PROGRESS  RESTARTS  AGE
+image-upload dv fedora-cloud-base-39-1-5-dv   WaitForFirstConsumer   N/A                 16m
+fedora-root                        CloneInProgress        N/A                 2m47s
+----
+
+=== Import the VM image
+
+Upload the image to a DavaVolume.
+
+[NOTE]
+====
+To use a PVC instead of a DV use `virtctl image-upload pvc` instead.
+====
+
+[source,bash]
+----
+virtctl image-upload dv iso-win10-20h2-v2-en-x64-dv \
+  --image-path=/z/var/lib/libvirt/images/Win10_20H2_v2_EnglishInternational_x64.iso \
+  --access-mode=ReadWriteMany \
+  --size=6G \
+  --uploadproxy-url=https://${CDI_UPLOAD_PROXY_IP}:443 \
+  --insecure \
+  --wait-secs=240 \
+  --storage-class=local-storage
+----
+
+
+== Remove the CDI Image
+
+Remote the DV created.
+
+[source,bash]
+----
+kubectl -n cdi-images delete dv image-upload dv fedora-cloud-base-39-1-5-dv
+----
+
+Cleanup the PV that are kept in `Released` status.
+
+[source,bash]
+----
+kubectl get pv
+----
+
+Patch those PV by removing the `claimRef` that is kept.
+
+[source,bash]
+----
+kubectl patch pv image-upload dv fedora-cloud-base-39-1-5-dv -p '{"spec":{"claimRef": null}}'
+----
+
+Or patch all the PV that are in _Released_ state.
+
+[source,bash]
+----
+kubectl get pv | tail -n+2 | awk '$5 == "Released" {print $1}' | xargs -I{} kubectl patch pv {} --type='merge' -p '{"spec":{"claimRef": null}}'
+----
+
+== Upgrade CDI
+
+To upgrade CDI first delete the namespace and then follow the CDI 
+ installation instructions again.
+
+[source,bash]
+----
+kubectl delete namespace cdi
+----

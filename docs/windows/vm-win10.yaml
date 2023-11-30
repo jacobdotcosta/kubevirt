@@ -1,0 +1,42 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: win10-iso
+spec:
+  running: false
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: win10-iso
+    spec:
+      domain:
+        cpu:
+          cores: 4
+        devices:
+          disks:
+          - bootOrder: 1
+            cdrom:
+              bus: sata
+            name: cdromiso
+          - disk:
+              bus: virtio
+            name: harddrive
+          - cdrom:
+              bus: sata
+            name: virtiocontainerdisk
+        machine:
+          type: q35
+        resources:
+          requests:
+            memory: 8G
+      volumes:
+      - name: cdromiso
+        persistentVolumeClaim:
+          claimName: iso-win10-20h2-v2-en-x64-dv
+      - name: harddrive
+        persistentVolumeClaim:
+          claimName: winc0001
+      - containerDisk:
+          image: kubevirt/virtio-container-disk
+          imagePullPolicy: IfNotPresent
+        name: virtiocontainerdisk

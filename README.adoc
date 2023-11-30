@@ -1,0 +1,101 @@
+= KubeVirt README
+Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+:icons: font
+:toclevels: 3
+:toc: left
+:description: KubeVirt: READNE
+
+== Introduction
+
+This project is a logbook of the steps I took to execute different kubevirt 
+ scenarios.
+
+== Acronyms
+
+CDI:: Containerized Data Importer (https://github.com/kubevirt/containerized-data-importer)
+DV:: Data Volume (https://kubevirt.io/user-guide/virtual_machines/disks_and_volumes/)
+NS:: Namespace
+PV:: Kubernetes Persistent Volume
+PVC:: Kubernetes Persistent Volume Claim
+VM:: Virtual Machine
+VMI:: Virtual Machine Instance
+
+== Pre-requisites
+
+* A Kubernetes cluster is already up and running 
+** throughout this project a link:https://kind.sigs.k8s.io/[kind] cluster will be used.
+* `virtctl` tool - check linkt:https://kubevirt.io/user-guide/operations/virtctl_client_tool/[kubevirt virtctl client tool]
+
+== Install Kubevirt
+
+Check the link:https://kubevirt.io/user-guide/operations/installation/[Kubevirt installation docs].
+
+Version used on this project: `v1.1.0`.
+
+
+== CDI
+
+CDI installation and image loading is documented link:docs/cdi[here]
+
+== Scenarios
+
+* link:./docs/no-persistence/README.adoc[VM without Persistent Storage]
+* link:./docs/persistence/README.adoc[VM with Persistent Storage]
+* link:./docs/fedora/README.adoc[Fedora Cloud]
+* link:./docs/windows/README.adoc[MS Windows VM]
+
+== Launch VM without Persistent Storage
+
+[source,bash]
+----
+kubectl apply -f kubevirt/misc/my-fcos.yaml 
+----
+
+Get the information from the virt-launcher POD.
+
+[source,bash]
+----
+kubectl describe pod $(kubectl get pods | grep virt-launcher |  awk '{print $1}')
+----
+
+== Prepare
+
+[.lead]
+Create the storage class.
+
+[source,bash]
+----
+kc apply -f kubevirt/storageclass.yaml
+----
+
+[.lead]
+Create PV folder structure.
+
+Root folder for PV and several PV subfolders.
+
+[source,bash]
+----
+sudo mkdir /data
+sudo chown $(whoami):$(whoami) -R /data
+mkdir /data/pv0001
+mkdir /data/pv0002
+mkdir /data/pv0003
+mkdir /data/pv0004
+mkdir /data/pv0005
+----
+
+Apply PV file.
+
+[source,bash]
+----
+kubectl apply -f kubevirt/pv.yaml
+----
+
+== Common Tasks
+
+=== Upload a VM image
+
+
+== References
+
+* https://kubevirt.io/2020/KubeVirt-VM-Image-Usage-Patterns.html

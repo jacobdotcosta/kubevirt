@@ -1,0 +1,102 @@
+= KubeVirt No Persistence
+Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+:icons: font
+:toclevels: 3
+:toc: left
+:description: KubeVirt: No Persistence
+
+== Introduction
+
+This document describes the deployment of a Fedora CoreOS VM without persistence.
+
+== Pre requisites
+
+Have an Ignition configuration file.
+
+Can be created from a Butane configuration file.
+
+Source: https://docs.fedoraproject.org/en-US/fedora-coreos/producing-ign/#_prerequisite
+
+[source,bash]
+----
+podman run --interactive --rm quay.io/coreos/butane:release \
+       --pretty --strict < kubevirt/no-persistence/example.bu > kubevirt/no-persistence/example.ign
+----
+
+== Launch VM without Persistent Storage
+
+Create the `vm-no-persistence` namespace.
+
+[source,bash]
+----
+kubectl create ns vm-no-persistence
+----
+
+Create a secret for the _ignition payload_.
+
+[source,bash]
+----
+kubectl -n vm-no-persistence create secret generic ignition-payload --from-file=userdata=kubevirt/no-persistence/example.ign
+----
+
+[source,bash]
+----
+kubectl apply -f kubevirt/no-persistence/my-fcos-vm.yaml 
+----
+
+Get the information from the virt-launcher POD.
+
+[source,bash]
+----
+kubectl -n vm-no-persistence describe pod $(kubectl -n vm-no-persistence get pods | grep virt-launcher |  awk '{print $1}')
+----
+
+Log the POD.
+
+[source,bash]
+----
+kubectl -n vm-no-persistence logs -f $(kubectl -n vm-no-persistence get pods | grep virt-launcher |  awk '{print $1}')
+----
+
+Check the VM is up and running.
+
+[source,bash]
+----
+kubectl -n vm-no-persistence get vmi
+
+NAME      AGE    PHASE     IP            NODENAME                 READY
+my-fcos   112s   Running   10.244.0.23   kubevirt-control-plane   True
+----
+
+== Connect to the VM
+
+[.lead]
+Using SSH.
+
+[CAUTION]
+====
+Doesn't work!
+====
+
+[source,bash]
+----
+virtctl -n vm-no-persistence ssh core@my-fcos -i ~/.ssh/id_rsa
+virtctl ssh core@vm/my-fcos.vm-no-persistence
+----
+
+[.lead]
+Using VNC.
+
+[source,bash]
+----
+virtctl -n vm-no-persistence vnc my-fcos
+----
+
+== Remove the VM
+
+[source,bash]
+----
+kubectl delete -f kubevirt/no-persistence/my-fcos-vm.yaml
+kubectl -n vm-no-persistence delete secret my-fcos
+kubectl delete ns vm-no-persistence
+----

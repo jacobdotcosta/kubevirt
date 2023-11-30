@@ -1,0 +1,46 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: my-fcos
+  namespace: vm-persistence
+spec:
+  runStrategy: Always
+  dataVolumeTemplates:
+  - metadata:
+      name: fcos-os-disk-volume
+    spec:
+      source:
+        registry:
+          url:
+            docker://quay.io/fedora/fedora-coreos-kubevirt:stable
+            # docker://quay.io/fedora/fedora-coreos:stable
+      storage:
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: 10Gi
+        accessModes:
+          - ReadWriteOnce
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: fcos-os-disk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+          rng: {}
+        resources:
+          requests:
+            memory: 2048M
+      volumes:
+      - name: fcos-os-disk
+        dataVolume:
+          name: fcos-os-disk-volume
+      - name: cloudinitdisk
+        cloudInitConfigDrive:
+          secretRef:
+            name: ignition-payload

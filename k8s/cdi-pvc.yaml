@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-5-001-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-5-002-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-5-003-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-5-004-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-5-005-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-7-001-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 7Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-7-002-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 7Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-7-003-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 7Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-7-004-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 7Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-path-7-005-pvc
+  namespace: cdi-images
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 7Gi

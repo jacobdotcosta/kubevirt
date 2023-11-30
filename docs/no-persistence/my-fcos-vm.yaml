@@ -1,0 +1,40 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: my-fcos
+  namespace: vm-no-persistence
+spec:
+  runStrategy: Always
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: containerdisk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+          rng: {}
+        resources:
+          requests:
+            memory: 2048M
+      volumes:
+      - name: containerdisk
+        containerDisk:
+          image: quay.io/fedora/fedora-coreos-kubevirt:stable
+          imagePullPolicy: Always
+      # - cloudInitNoCloud:
+      #     userData: |
+      #       #!/bin/sh
+      #       hostname: fedora0001
+      #       ssh_pwauth: True
+      #       disable_root: false
+      #       ssh_authorized_keys:
+      #       - ssh-rsa ...
+      #   name: cloudinitdisk
+      - name: cloudinitdisk
+        cloudInitConfigDrive:
+          secretRef:
+            name: ignition-payload

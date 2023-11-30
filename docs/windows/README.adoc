@@ -1,0 +1,159 @@
+= KubeVirt: installing Microsoft Windows from an ISO
+Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+:icons: font
+:toclevels: 3
+:toc: left
+:description: KubeVirt: installing Microsoft Windows from an ISO
+
+== Introduction
+
+This document describes the steps to deploy a Microsoft Windows VM on a 
+ kubernetes cluster using _kubevirt_.
+
+== Acronyms
+
+DV:: Data Volume (https://kubevirt.io/user-guide/virtual_machines/disks_and_volumes/)
+PV:: Kubernetes Persistent Volume
+PVC:: Kubernetes Persistent Volume Claim
+
+== Pre-requisites
+
+* A Kubernetes cluster is already up and running
+* KubeVirt and CDI are already installed
+* There is enough free CPU, Memory and disk space in the cluster to deploy a Microsoft Windows VM, in this example, the version 2012 R2 VM is going to be used
+
+== Preparation
+
+=== Create PVs and PVCs
+
+[source,bash]
+----
+sudo mkdir -p /data
+sudo chown $(whoami):$(whoami) -R /data
+mkdir /data/pv0001/
+mkdir /data/winc0001/
+kc apply -f kubevirt/windows/storageclass.yaml
+kc apply -f kubevirt/windows/pv.yaml
+kc apply -f kubevirt/windows/pvc.yaml
+----
+
+=== Download virtio container disk
+
+[source,bash]
+----
+docker pull kubevirt/virtio-container-disk
+----
+
+=== Upload the VM image
+
+Get the  `cdi-uploadproxy` service address.
+
+[source,bash]
+----
+CDI_UPLOAD_PROXY_IP=$(kubectl -n cdi get service cdi-uploadproxy -o jsonpath='{.spec.clusterIP}')
+echo ${CDI_UPLOAD_PROXY_IP}
+----
+
+.Show detailed information for the `cdi-uploadproxy` service location.
+[%collapsible]
+====
+
+[NOTE]
+======
+Information on obtaining the `cdi-uploadproxy` service address.
+
+[source,bash]
+----
+kubectl get services -n cdi
+----
+
+The list of services on the `cdi` namespace is presented.
+
+[source]
+----
+NAME                       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+cdi-api                    ClusterIP   10.96.87.138   <none>        443/TCP         86m
+cdi-prometheus-metrics     ClusterIP   10.96.117.2    <none>        8080/TCP        86m
+cdi-uploadproxy            ClusterIP   10.96.8.120    <none>        443/TCP         86m
+cdi-uploadproxy-nodeport   NodePort    10.96.39.19    <none>        443:31001/TCP   43m
+----
+
+======
+
+====
+
+Upload the image to a DavaVolume.
+
+[NOTE]
+====
+To use a PVC instead of a DV use `virtctl image-upload pvc` instead.
+====
+
+[source,bash]
+----
+virtctl image-upload dv iso-win10-20h2-v2-en-x64-dv \
+  --image-path=/z/var/lib/libvirt/images/Win10_20H2_v2_EnglishInternational_x64.iso \
+  --access-mode=ReadWriteMany \
+  --size=6G \
+  --uploadproxy-url=https://${CDI_UPLOAD_PROXY_IP}:443 \
+  --insecure \
+  --wait-secs=240 \
+  --storage-class=local-storage
+----
+
+== Create the VM
+
+Create VM.
+
+[source,bash]
+----
+kc apply -f kubevirt/windows/vm-win10.yaml
+----
+
+Check the VM has been created.
+
+[source,bash]
+----
+kc get vm
+----
+
+[source]
+----
+NAME        AGE    STATUS             READY
+win10-iso   22s    Stopped            False
+----
+
+Start the VM with `virtctl`.
+
+[source,bash]
+----
+virtctl start win10-iso
+----
+
+Check the VM instances.
+
+[source,bash]
+----
+kc get vmis
+----
+
+[source]
+----
+NAME        AGE    PHASE     IP    NODENAME   READY
+win10-iso   8s     Pending                    False
+----
+
+== Remove
+
+[source,bash]
+----
+kc delete -f kubevirt/windows/vm-win10.yaml
+kc delete -f kubevirt/windows/pvc.yaml
+kc delete -f kubevirt/windows/pv.yaml
+kc delete dv iso-win10-20h2-v2-en-x64-dv
+----
+
+== References
+
+* https://kubevirt.io/2020/KubeVirt-installing_Microsoft_Windows_from_an_iso.html
+
