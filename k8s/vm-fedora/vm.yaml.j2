@@ -40,7 +40,7 @@ spec:
             ssh_pwauth: True
             disable_root: false
             ssh_authorized_keys:
-            - ssh-rsa ...
+            - {{ SSH_RSA_PUB }}
         name: cloudinitdisk
   dataVolumeTemplates:
   - metadata:
@@ -51,9 +51,9 @@ spec:
         - ReadWriteOnce
         resources:
           requests:
-            storage: 7Gi
+            storage: 15Gi
+        storageClassName: local-path
       source:
         pvc:
-          name: image-upload dv fedora-cloud-base-39-1-5-dv
+          name: fedora-cloud-base-39-1-5-dv
           namespace: cdi-images
-          storageClassName: local-path

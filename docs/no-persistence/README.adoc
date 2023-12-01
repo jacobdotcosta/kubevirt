@@ -1,5 +1,5 @@
 = KubeVirt No Persistence
-Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+Antonio C. <antcosta (at) redhat (dot) com>
 :icons: font
 :toclevels: 3
 :toc: left

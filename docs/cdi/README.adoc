@@ -1,5 +1,5 @@
 = KubeVirt: Containerized Data Importer 
-Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
+Antonio C. <antcosta (at) redhat (dot) com>
 :icons: font
 :keywords: k8s, virtualization, cdi
 :revdate: {docdate}
@@ -10,6 +10,7 @@ Antonio C. <a (doc) costa (at) trikorasolutions (dot) com
 == Introduction
 
 This document describes the steps to install CDI and upload an image.
+
 
 == Install CDI
 
@@ -25,6 +26,8 @@ echo $VERSION
 kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
 kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
 ----
+
+Version used on this project: `v1.58.0`.
 
 
 === Set proxy for `cdi-uploadproxy` service
@@ -67,6 +70,7 @@ Set up a local port forward using kubectl.
 kubectl port-forward -n cdi service/cdi-uploadproxy 38443:443
 ----
 
+
 == Prepare
 
 Create a namespace for the vm images.
@@ -76,16 +80,15 @@ Create a namespace for the vm images.
 kubectl create namespace cdi-images
 ----
 
-Create PVCs.
+// Create PVCs.
 
-[source,bash]
-----
-kubectl apply -f k8s/cdi-pvc.yaml
-----
+// [source,bash]
+// ----
+// kubectl apply -f k8s/cdi-pvc.yaml
+// ----
 
 
 == Install
-
 
 
 === Import the VM image that will be used by CDI
@@ -106,7 +109,7 @@ virtctl image-upload dv fedora-cloud-base-39-1-5-dv \
   --image-path=Fedora-Cloud-Base-39-1.5.x86_64.raw.xz \
   --access-mode=ReadWriteOnce \
   --volume-mode=filesystem \
-  --size=600Mi \
+  --size=5Gi \
   --uploadproxy-url=https://127.0.0.1:38443 \
   --insecure \
   --wait-secs=240 \
@@ -120,79 +123,83 @@ The output is the following.
 
 [source]
 ----
-PVC vm-fedora/image-upload dv fedora-cloud-base-39-1-5-dv not found 
-DataVolume vm-fedora/image-upload dv fedora-cloud-base-39-1-5-dv created
-Waiting for PVC image-upload dv fedora-cloud-base-39-1-5-dv upload pod to be ready...
+PVC cdi-images/fedora-cloud-base-39-1-5-dv not found 
+DataVolume cdi-images/fedora-cloud-base-39-1-5-dv created
+Waiting for PVC fedora-cloud-base-39-1-5-dv upload pod to be ready...
 ----
-
-At this point I had some problems which I now moved to the <<Troubleshooting>> 
- section.
-
-Finally the image is uploaded.
-
-[source,bash]
-----
-kc -n vm-fedora get dv
-NAME                               PHASE         PROGRESS   RESTARTS   AGE
-image-upload dv fedora-cloud-base-39-1-5-dv   UploadReady   N/A        1          16h
-----
-
-[source,bash]
-----
-kc -n vm-fedora get pvc
-NAME                                       STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS    AGE
-image-upload dv fedora-cloud-base-39-1-5-dv           Bound    pv0005   7Gi        RWO            local-storage   16h
-image-upload dv fedora-cloud-base-39-1-5-dv-scratch   Bound    pv0002   7Gi        RWO            local-storage   16h
-----
-
-[source,bash]
-----
-kc -n vm-fedora get pod
-NAME                                          READY   STATUS    RESTARTS      AGE
-cdi-upload-image-upload dv fedora-cloud-base-39-1-5-dv   1/1     Running   1 (12m ago)   16h
-----
-
-First the DV will be cloned.
-
-[source,bash]
-----
-kc get dv
-
-NAME                               PHASE                  PROGRESS  RESTARTS  AGE
-image-upload dv fedora-cloud-base-39-1-5-dv   WaitForFirstConsumer   N/A                 16m
-fedora-root                        CloneInProgress        N/A                 2m47s
-----
-
-=== Import the VM image
-
-Upload the image to a DavaVolume.
 
 [NOTE]
 ====
-To use a PVC instead of a DV use `virtctl image-upload pvc` instead.
+At this point I had some problems which I have now moved to the 
+ <<Troubleshooting>> section.
 ====
+
+After a while the output continues.
+
+[source]
+----
+Pod now ready
+Uploading data to https://127.0.0.1:38443
+
+ 425.36 MiB / 425.36 MiB [=================================] 100.00% 1m46s
+
+Uploading data completed successfully, waiting for processing to complete, you can hit ctrl-c without interrupting the progress
+Processing completed successfully
+Uploading Fedora-Cloud-Base-39-1.5.x86_64.raw.xz completed successfully
+----
+
+Finally the image is uploaded. To check the status of the DV use the 
+ following `kubectl` command.
+
+.Get the created DV
+[source,bash]
+----
+kc -n cdi-images get dv
+----
+
+The DV should have the `Succeeded` status.
+
+[source]
+----
+NAME                         PHASE       PROGRESS
+fedora-cloud-base-39-1-5-dv  Succeeded   N/A
+----
+
+.Check the created PVC
+[source,bash]
+----
+kc -n cdi-images get pvc
+----
+
+The PVC should show up on `Bound` status.
+
+[source]
+----
+NAME                        STATUS VOLUME                                     CAPACITY     ACCESS MODES   STORAGECLASS
+fedora-cloud-base-39-1-5-dv Bound  pvc-1434ed2c-445f-4366-9254-5d593fdcdbcd   5681173672   RWO            local-path
+----
+
+== Roles
+
+Apply the Role configuration.
 
 [source,bash]
 ----
-virtctl image-upload dv iso-win10-20h2-v2-en-x64-dv \
-  --image-path=/z/var/lib/libvirt/images/Win10_20H2_v2_EnglishInternational_x64.iso \
-  --access-mode=ReadWriteMany \
-  --size=6G \
-  --uploadproxy-url=https://${CDI_UPLOAD_PROXY_IP}:443 \
-  --insecure \
-  --wait-secs=240 \
-  --storage-class=local-storage
+kubectl apply -f k8s/cdi/role.yaml
 ----
 
 
 == Remove the CDI Image
 
-Remote the DV created.
+Remove the DV created.
 
 [source,bash]
 ----
-kubectl -n cdi-images delete dv image-upload dv fedora-cloud-base-39-1-5-dv
+kubectl -n cdi-images delete dv fedora-cloud-base-39-1-5-dv
 ----
+
+As we're using `local-path` dynamic provisioning no PV or PVC should 
+ need to be removed.
 
 Cleanup the PV that are kept in `Released` status.
 
@@ -205,7 +212,7 @@ Patch those PV by removing the `claimRef` that is kept.
 
 [source,bash]
 ----
-kubectl patch pv image-upload dv fedora-cloud-base-39-1-5-dv -p '{"spec":{"claimRef": null}}'
+kubectl patch pv fedora-cloud-base-39-1-5-dv -p '{"spec":{"claimRef": null}}'
 ----
 
 Or patch all the PV that are in _Released_ state.
@@ -214,6 +221,74 @@ Or patch all the PV that are in _Released_ state.
 ----
 kubectl get pv | tail -n+2 | awk '$5 == "Released" {print $1}' | xargs -I{} kubectl patch pv {} --type='merge' -p '{"spec":{"claimRef": null}}'
 ----
+
+
+== Uninstall CDI
+
+Delete the `cdi-images` namespace
+
+[source,bash]
+----
+kubectl delete namespace cdi-images
+----
+
+[source,bash]
+----
+kubectl delete -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
+kubectl delete -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
+----
+
+Delete the `cdi` namespace.
+
+[source,bash]
+----
+kubectl delete namespace cdi
+----
+
+In case any of the namespaces are kept on `Terminating` state remove the 
+ `kubernetes` finalizer.
+
+Download the namespace definition.
+
+[source,bash]
+----
+kc get ns cdi-images -o json > /tmp/cdi-images.json
+kc get ns cdi -o json > /tmp/cdi.json
+----
+
+Edit the `json` file and remove the `kubernetes` finalizar from the 
+ `spec.finalizers` list.
+
+Launch `kubectl proxy` on another terminal.
+
+[source,bash]
+----
+curl -k -H "Content-Type: application/json" -X PUT --data-binary @/tmp/cdi-images.json http://127.0.0.1:8001/api/v1/namespaces/cdi-images/finalize
+curl -k -H "Content-Type: application/json" -X PUT --data-binary @/tmp/cdi.json http://127.0.0.1:8001/api/v1/namespaces/cdi/finalize
+----
+
+Identify the port where docker is publishing the API.
+
+[source,bash]
+----
+docker ps
+----
+
+[source]
+----
+CONTAINER ID   IMAGE                  COMMAND                  CREATED        STATUS       PORTS                                                                 NAMES
+e646bc314562   kindest/node:v1.26.3   "/usr/local/bin/entr…"   2 weeks ago    Up 5 hours   0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp, 127.0.0.1:34009->6443/tcp   kubevirt-control-plane
+1
+----
+
+Patch the namespaces.
+
+[source,bash]
+----
+curl -k -H "Content-Type: application/json" -X PUT --data-binary @/tmp/cdi-images.json https://127.0.0.1:34009/api/v1/namespaces/cdi-images/finalize
+curl -k -H "Content-Type: application/json" -X PUT --data-binary @/tmp/cdi.json https://127.0.0.1:34009/api/v1/namespaces/cdi/finalize
+----
+
 
 == Upgrade CDI
 
@@ -224,3 +299,39 @@ To upgrade CDI first delete the namespace and then follow the CDI
 ----
 kubectl delete namespace cdi
 ----
+
+== Troubleshooting
+
+=== Virtual image size ... is larger than the reported available storage .... A larger PVC is required.
+
+*Symptom*
+
+When uploading an image an error stating that _A larger PVC is required._ is shown.
+
+[source]
+----
+unexpected return value 400, Saving stream failed: Virtual image size 5368709120 is larger than the reported available storage 665762540. A larger PVC is required.
+----
+
+*Cause*
+
+The size of the PVC associated with the DV isn't big enough to support 
+ the image beign uploaded. If a RAW (`raw.xz`) image is being uploaded the 
+ size required is for the uncompressed image. For instances raw Fedora Cloud 
+ images have sizes of around ~450 MB but the image uses ~5GB of space.
+
+*Solution*
+
+Increase the size of the DV being uploaded throught the `--size=5Gi` parameter of the `virtctl image-upload` command.
+
+[NOTE]
+====
+Bare in mind that When trying to re-upload an image the PVC will be reused 
+ so in these cases the DV must be deleted prior to be re-uploaded.
+
+.Delete the DV
+[source.bash]
+----
+kubectl -n cdi-images delete dv fedora-cloud-base-39-1-5-dv
+----
+====
